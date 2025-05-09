@@ -2,6 +2,7 @@ package security
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 const (
 	TokenTTL = time.Hour
+	TokenCookieName = "authToken"
 )
 
 func getSecretKey() string {
@@ -37,50 +39,57 @@ func CreateToken(username string, expiresAt... time.Time) (string, error) {
 	return token.SignedString([]byte(secret))
 }
 
+var (
+	ErrInvalidToken = errors.New("invalid token")
+	ErrExpiredToken = errors.New("expired token")
+	ErrInternal     = errors.New("internal error: %w")
+)
+
 func GetUsernameFromToken(tokenString string) (string, error) {
 	secret := getSecretKey()
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected token signing method")
+			return nil, fmt.Errorf("%w: unexpected token signing method", ErrInternal)
 		}
 
 		return []byte(secret), nil
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %s", ErrInternal, err.Error())
 	}
+
 	if !token.Valid {
-		return "", errors.New("invalid token")
+		return "", ErrInvalidToken
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return "", errors.New("invalid token claims")
+		return "", fmt.Errorf("%w: invalid token claims", ErrInternal)
 	}
 
 	expiresAtRaw, ok := claims["exp"]
 	if !ok {
-		return "", errors.New("token does not contain expiration time")
+		return "", fmt.Errorf("%w: token does not contain expiration time", ErrInternal)
 	}
 
 	expiresAt, ok := expiresAtRaw.(float64)
 	if !ok {
-		return "", errors.New("invalid expiration time")
+		return "", fmt.Errorf("%w: invalid expiration time", ErrInternal)
 	}
 
 	if time.Now().Unix() > int64(expiresAt) {
-		return "", errors.New("token expired")
+		return "", ErrExpiredToken
 	}
 
 	username, ok := claims["username"]
 	if !ok {
-		return "", errors.New("token does not contain username")
+		return "", fmt.Errorf("%w: token does not contain username", ErrInternal)
 	}
 
 	usernameStr, ok := username.(string)
 	if !ok {
-		return "", errors.New("invalid username")
+		return "", fmt.Errorf("%w: invalid username", ErrInternal)
 	}
 
 	return usernameStr, nil

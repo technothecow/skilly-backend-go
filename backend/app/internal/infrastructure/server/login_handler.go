@@ -45,7 +45,7 @@ func (s *Server) PostLogin(c *gin.Context) {
 			return
 		}
 		c.SetSameSite(http.SameSiteStrictMode)
-		c.SetCookie("authToken", token, int(security.TokenTTL.Seconds()), "/", "", false, true)
+		c.SetCookie(security.TokenCookieName, token, int(security.TokenTTL.Seconds()), "/", "", false, true)
 		c.Status(http.StatusOK)
 	} else {
 		c.JSON(http.StatusBadRequest, gen.Error{

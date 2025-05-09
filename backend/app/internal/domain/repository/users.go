@@ -52,7 +52,6 @@ func (r *UserRepositoryImpl) GetUserByUsername(ctx context.Context, username str
 }
 
 func (r *UserRepositoryImpl) CreateUser(ctx context.Context, user models.User) error {
-	r.logger.Info("creating user", slog.Any("user", user))
 	_, err := r.mongo.Database.Collection("users").InsertOne(ctx, user)
 	if err != nil {
 		r.logger.Error("failed to create user", slog.Any("error", err))
@@ -63,7 +62,7 @@ func (r *UserRepositoryImpl) CreateUser(ctx context.Context, user models.User) e
 }
 
 func (r *UserRepositoryImpl) UpdateUser(ctx context.Context, user models.User) error {
-	_, err := r.mongo.Database.Collection("users").UpdateOne(ctx, bson.M{"_id": user.Id}, user)
+	_, err := r.mongo.Database.Collection("users").UpdateOne(ctx, bson.M{"_id": user.Id}, bson.M{"$set": user})
 	if err != nil {
 		r.logger.Error("failed to update user", slog.Any("error", err))
 		return ErrInternal
