@@ -36,6 +36,15 @@ func (s *Server) PostRegister(c *gin.Context) {
 		return
 	}
 
+	body.Password, err = security.HashPassword(body.Password)
+	if err != nil {
+		s.deps.Logger.Error("failed to hash password", slog.Any("error", err))
+		c.JSON(http.StatusInternalServerError, gen.Error{
+			Code: "internal_server_error",
+		})
+		return
+	}
+
 	user := models.User{
 		Username:  body.Username,
 		Password:  body.Password,

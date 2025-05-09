@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const AuthCookieRegexp = "authToken=([^;]+);\\s*Path=/;\\s*Max-Age=\\d+;\\s*HttpOnly;\\s*SameSite=Strict$"
+
 func TestUsernameAvailability(t *testing.T) {
 	ctx := context.Background()
 	close, err := TestUsingDockerCompose(ctx, t)
@@ -54,7 +56,7 @@ func TestUserRegistration(t *testing.T) {
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, resp.StatusCode)
-	assert.Regexp(t, "authToken=([^;]+);\\s*Path=/;\\s*Max-Age=\\d+;\\s*HttpOnly;\\s*SameSite=Strict$", resp.Header.Get("Set-Cookie"))
+	assert.Regexp(t, AuthCookieRegexp, resp.Header.Get("Set-Cookie"))
 
 	resp, err = httpClient.Get("http://localhost:8000/check-username?username=test")
 	assert.NoError(t, err)
@@ -77,4 +79,37 @@ func TestUserRegistration(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	assert.NoError(t, err)
 	assert.Equal(t, "username_already_exists", response["code"])
+
+	body, err = json.Marshal(
+		map[string]any{
+			"username": "test",
+			"password": "test",
+		},
+	)
+	assert.NoError(t, err)
+
+	resp, err = httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Regexp(t, AuthCookieRegexp, resp.Header.Get("Set-Cookie"))
+
+	body, err = json.Marshal(
+		map[string]any{
+			"username": "test",
+			"password": "wrong",
+		},
+	)
+	assert.NoError(t, err)
+
+	resp, err = httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	assert.NoError(t, err)
+	assert.Equal(t, "invalid_credentials", response["code"])
 }
