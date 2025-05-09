@@ -133,4 +133,14 @@ func TestUserFlow(t *testing.T) {
 	assert.Equal(t, "test", response["bio"])
 	assert.Equal(t, []interface{}{"test"}, response["teaching"].([]interface{}))
 	assert.Equal(t, []interface{}{"test"}, response["learning"].([]interface{}))
+
+	resp, err = httpClient.Post("http://localhost:8000/profile/view?username=wrong", "none", bytes.NewBuffer([]byte{}))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	assert.NoError(t, err)
+	assert.Equal(t, "username_not_found", response["code"])
 }
