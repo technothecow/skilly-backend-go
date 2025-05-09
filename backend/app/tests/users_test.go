@@ -33,7 +33,7 @@ func TestUsernameAvailability(t *testing.T) {
 	assert.Equal(t, true, response["available"])
 }
 
-func TestUserRegistration(t *testing.T) {
+func TestUserFlow(t *testing.T) {
 	ctx := context.Background()
 	close, err := TestUsingDockerCompose(ctx, t)
 	assert.NoError(t, err)
@@ -112,4 +112,25 @@ func TestUserRegistration(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	assert.NoError(t, err)
 	assert.Equal(t, "invalid_credentials", response["code"])
+
+	resp, err = httpClient.Post("http://localhost:8000/logout", "none", bytes.NewBuffer([]byte{}))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	assert.Equal(t, "authToken=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict", resp.Header.Get("Set-Cookie"))
+
+	resp, err = httpClient.Post("http://localhost:8000/profile/view?username=test", "none", bytes.NewBuffer([]byte{}))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	assert.NoError(t, err)
+	assert.Equal(t, "test", response["username"])
+	assert.Equal(t, "", response["pictureUrl"])
+	assert.Equal(t, "test", response["bio"])
+	assert.Equal(t, []interface{}{"test"}, response["teaching"].([]interface{}))
+	assert.Equal(t, []interface{}{"test"}, response["learning"].([]interface{}))
 }
