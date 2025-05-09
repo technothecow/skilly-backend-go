@@ -1,0 +1,80 @@
+package tests
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestUsernameAvailability(t *testing.T) {
+	ctx := context.Background()
+	close, err := TestUsingDockerCompose(ctx, t)
+	assert.NoError(t, err)
+	defer close()
+
+	httpClient := &http.Client{}
+	resp, err := httpClient.Get("http://localhost:8000/check-username?username=test")
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+
+	var response map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	assert.NoError(t, err)
+
+	assert.Equal(t, true, response["available"])
+}
+
+func TestUserRegistration(t *testing.T) {
+	ctx := context.Background()
+	close, err := TestUsingDockerCompose(ctx, t)
+	assert.NoError(t, err)
+	defer close()
+
+	body, err := json.Marshal(
+		map[string]any{
+			"username": "test",
+			"password": "test",
+			"bio":      "test",
+			"teaching": []string{"test"},
+			"learning": []string{"test"},
+		},
+	)
+	assert.NoError(t, err)
+
+	httpClient := &http.Client{}
+	resp, err := httpClient.Post("http://localhost:8000/register", "application/json", bytes.NewBuffer(body))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	assert.Regexp(t, "authToken=([^;]+);\\s*Path=/;\\s*Max-Age=\\d+;\\s*HttpOnly;\\s*SameSite=Strict$", resp.Header.Get("Set-Cookie"))
+
+	resp, err = httpClient.Get("http://localhost:8000/check-username?username=test")
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var response map[string]any
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	assert.NoError(t, err)
+
+	assert.Equal(t, false, response["available"])
+
+	resp, err = httpClient.Post("http://localhost:8000/register", "application/json", bytes.NewBuffer(body))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusConflict, resp.StatusCode)
+	assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	assert.NoError(t, err)
+	assert.Equal(t, "username_already_exists", response["code"])
+}

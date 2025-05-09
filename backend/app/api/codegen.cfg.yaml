@@ -1,0 +1,8 @@
+package: gen # Name of the generated package
+generate:
+  gin-server: true # Generate Gin server boilerplate (interface, registration)
+  models: true
+  embedded-spec: true # Embed the OpenAPI spec in the generated code
+output: internal/infrastructure/gen/gen.go # Output file path
+output-options:
+  skip-prune: true

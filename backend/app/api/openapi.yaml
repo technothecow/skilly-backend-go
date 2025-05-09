@@ -1,0 +1,358 @@
+openapi: '3.1.0'
+info:
+  title: Skilly Platform API
+  description: API for a platform connecting users to share skills via chat and meetings.
+  version: 1.0.0
+
+components:
+  securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: authToken
+  
+  # Apply security globally (override per operation if needed)
+  security:
+    - CookieAuth: []
+
+  schemas:
+    # responses
+
+    Error:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: An application-specific error code.
+        message:
+          type: string
+          description: A human-readable description of the error.
+        details:
+          type: object
+          description: Optional additional details about the error.
+
+    # requests
+
+    CheckUsernameResponse:
+      type: object
+      required:
+        - available
+      properties:
+        available:
+          type: boolean
+          description: Whether the username is available or not.
+
+    RegisterRequest:
+      type: object
+      required:
+        - username
+        - password
+        - bio
+        - teaching
+        - learning
+      properties:
+        username:
+          type: string
+          description: Username to register.
+        password:
+          type: string
+          description: Password to register.
+        bio:
+          type: string
+          description: Bio to register.
+        teaching:
+          type: array
+          items:
+            type: string
+          description: Skills to teach.
+        learning:
+          type: array
+          items:
+            type: string
+          description: Skills to learn.
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: Username to login.
+        password:
+          type: string
+          description: Password to login.
+
+    SearchRequest:
+      type: object
+      required:
+        - username
+        - skills
+        - page
+        - pagesize
+      properties:
+        username:
+          type: string
+          description: Username to search.
+        skills:
+          type: array
+          items:
+            type: string
+          description: Skills to search.
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Page number to retrieve.
+        pagesize:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10
+          description: Number of items to retrieve per page.
+
+    ProfileEditRequest:
+      type: object
+      properties:
+        bio:
+          type: string
+          description: Short user biography.
+        teaching:
+          type: array
+          items:
+            type: string
+          description: Skills the user is willing to teach.
+        learning:
+          type: array
+          items:
+            type: string
+          description: Skills the user wants to learn.
+        password:
+          type: string
+          format: password
+          description: New password for the user.
+
+    # models
+
+    UserProfile:
+      type: object
+      required:
+        - username
+        - pictureUrl
+        - bio
+        - teaching
+        - learning
+      properties:
+        username:
+          type: string
+          description: Username of the user.
+        pictureUrl:
+          type: string
+          format: url
+          description: URL to the user's avatar image.
+        bio:
+          type: string
+          description: Short user biography.
+        teaching:
+          type: array
+          items:
+            type: string
+          description: Skills the user is willing to teach.
+        learning:
+          type: array
+          items:
+            type: string
+          description: Skills the user wants to learn.
+
+  parameters:
+    UsernameParam:
+      required: true
+      name: username
+      in: query
+      description: Username to check.
+      schema:
+        type: string
+
+  responses:
+    Conflict:
+      description: The request conflicts with the current state of the target resource.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    BadRequest:
+      description: The request syntax is invalid or contains invalid parameters.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    PongResponse:
+      description: Pong message
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - message
+            properties:
+              message:
+                type: string
+                description: Pong message
+
+    CheckUsernameResponse:
+      description: Response to check username
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CheckUsernameResponse'
+
+    SetAuthResponse:
+      description: Set authentication cookie
+      headers:
+        Set-Cookie:
+          schema:
+            type: string
+            example: authToken=eyJhbGciOiJIUz...; Path=/; HttpOnly; SameSite=Strict # TODO: add Secure attribute when moving to nginx and https
+    
+    SearchResponse:
+      description: Response to search users
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - users
+            properties:
+              users:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserProfile'
+
+    SetPictureResponse:
+      description: Response to set the current user's profile picture
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - url
+            properties:
+              url:
+                type: string
+                format: url
+                description: URL to the user's avatar image.
+
+paths:
+  /ping:
+    get:
+      summary: Ping the server
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/PongResponse'
+
+  /check-username:
+    get:
+      summary: Check if given username is available
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/UsernameParam'
+      responses:
+        '200':
+          $ref: '#/components/responses/CheckUsernameResponse'
+
+  /register:
+    post:
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          $ref: '#/components/responses/SetAuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  
+  /login:
+    post:
+      summary: Login a user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SetAuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  
+  /logout:
+    post:
+      summary: Logout the current user
+      responses:
+        '204':
+          description: Logout successful. No content returned. Auth cookie is deleted.
+
+  /profile/view:
+    post:
+      summary: View the user's profile
+      parameters:
+        - $ref: '#/components/parameters/UsernameParam'
+      responses:
+        '200':
+          description: Profile details retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /profile/edit:
+    post:
+      summary: Edit the current user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileEditRequest'
+      responses:
+        '200':
+          description: Profile updated successfully. Returns updated user profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /profile/set_picture:
+    post:
+      summary: Set the current user's profile picture
+      responses:
+        '200':
+          $ref: '#/components/responses/SetPictureResponse'
+
+  /search:
+    post:
+      summary: Search for users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SearchResponse'
