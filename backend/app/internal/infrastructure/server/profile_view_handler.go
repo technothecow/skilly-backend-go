@@ -8,9 +8,15 @@ import (
 
 	"skilly/internal/domain/repository"
 	"skilly/internal/infrastructure/gen"
+	"skilly/internal/infrastructure/security"
 )
 
 func (s *Server) PostProfileView(c *gin.Context, params gen.PostProfileViewParams) {
+	_, err := security.AuthUser(c, s.deps)
+	if err != nil {
+		return
+	}
+
 	repo := repository.NewUserRepository(s.deps.Mongo, s.deps.Logger)
 
 	user, err := repo.GetUserByUsername(c.Request.Context(), params.Username)

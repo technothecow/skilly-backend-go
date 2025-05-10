@@ -5,14 +5,30 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/cookiejar"
-	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 const AuthCookieRegexp = "authToken=([^;]+);\\s*Path=/;\\s*Max-Age=\\d+;\\s*HttpOnly;\\s*SameSite=Strict$"
+
+func AuthorizeClient(t *testing.T, httpClient *http.Client, username string, password string) (func(), error) {
+	body := MarshalBody(t, map[string]any{
+		"username": username,
+		"password": password,
+	})
+
+	resp, err := httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Regexp(t, AuthCookieRegexp, resp.Header.Get("Set-Cookie"))
+
+	cancel := SetCookies(t, httpClient, resp.Cookies())
+
+	return cancel, nil
+}
 
 func TestUsernameAvailability(t *testing.T) {
 	ctx := context.Background()
@@ -137,10 +153,25 @@ func TestUserFlow(t *testing.T) {
 		assert.NoError(t, err)
 		defer resp.Body.Close()
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
 
 		response := ParseBody(t, resp)
+
+		assert.Equal(t, "unauthorized", response["code"])
+
+		cancel, err := AuthorizeClient(t, httpClient, "test", "test")
+		assert.NoError(t, err)
+		defer cancel()
+
+		resp, err = httpClient.Post("http://localhost:8000/profile/view?username=test", "none", bytes.NewBuffer([]byte{}))
+		assert.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
+
+		response = ParseBody(t, resp)
 
 		assert.Equal(t, "test", response["username"])
 		assert.Equal(t, "", response["pictureUrl"])
@@ -150,6 +181,10 @@ func TestUserFlow(t *testing.T) {
 	})
 
 	t.Run("profile-view-nonexistent-username", func(t *testing.T) {
+		cancel, err := AuthorizeClient(t, httpClient, "test", "test")
+		assert.NoError(t, err)
+		defer cancel()
+
 		resp, err := httpClient.Post("http://localhost:8000/profile/view?username=wrong", "none", bytes.NewBuffer([]byte{}))
 		assert.NoError(t, err)
 		defer resp.Body.Close()
@@ -164,30 +199,12 @@ func TestUserFlow(t *testing.T) {
 
 	t.Run("profile-edit", func(t *testing.T) {
 		// logging in
-		body := MarshalBody(t, map[string]any{
-			"username": "test",
-			"password": "test",
-		})
-
-		resp, err := httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
+		cancel, err := AuthorizeClient(t, httpClient, "test", "test")
 		assert.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Regexp(t, AuthCookieRegexp, resp.Header.Get("Set-Cookie"))
-		
-		// setting cookie
-		cookies := resp.Cookies()
-		url, err := url.Parse("http://localhost:8000/profile/edit")
-		assert.NoError(t, err)
-		jar, err := cookiejar.New(nil)
-		assert.NoError(t, err)
-		jar.SetCookies(url, cookies)
-		httpClient.Jar = jar
-		defer httpClient.Jar.SetCookies(url, nil)
+		defer cancel()
 
 		// editing profile
-		body, err = json.Marshal(
+		body, err := json.Marshal(
 			map[string]any{
 				"password": "new",
 				"bio":      "new",
@@ -197,7 +214,7 @@ func TestUserFlow(t *testing.T) {
 		)
 		assert.NoError(t, err)
 
-		resp, err = httpClient.Post("http://localhost:8000/profile/edit", "application/json", bytes.NewBuffer(body))
+		resp, err := httpClient.Post("http://localhost:8000/profile/edit", "application/json", bytes.NewBuffer(body))
 		assert.NoError(t, err)
 		defer resp.Body.Close()
 

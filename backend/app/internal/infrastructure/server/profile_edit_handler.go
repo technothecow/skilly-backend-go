@@ -1,7 +1,6 @@
 package server
 
 import (
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -13,39 +12,8 @@ import (
 )
 
 func (s *Server) PostProfileEdit(c *gin.Context) {
-	authCookie, err := c.Cookie(security.TokenCookieName)
+	username, err := security.AuthUser(c, s.deps)
 	if err != nil {
-		if err == http.ErrNoCookie {
-			c.JSON(http.StatusUnauthorized, gen.Error{
-				Code: "unauthorized",
-			})
-			return
-		}
-		s.deps.Logger.Error("failed to get auth cookie", slog.Any("error", err))
-		c.JSON(http.StatusInternalServerError, gen.Error{
-			Code: "internal_server_error",
-		})
-		return
-	}
-	
-	username, err := security.GetUsernameFromToken(authCookie)
-	if err != nil {
-		if errors.Is(err, security.ErrInvalidToken) {
-			c.JSON(http.StatusUnauthorized, gen.Error{
-				Code: "invalid_credentials",
-			})
-			return
-		}
-		if errors.Is(err, security.ErrExpiredToken) {
-			c.JSON(http.StatusUnauthorized, gen.Error{
-				Code: "expired_token",
-			})
-			return
-		}
-		s.deps.Logger.Error("failed to get auth cookie", slog.Any("error", err))
-		c.JSON(http.StatusInternalServerError, gen.Error{
-			Code: "internal_server_error",
-		})
 		return
 	}
 

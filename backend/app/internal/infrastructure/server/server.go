@@ -30,7 +30,7 @@ func BindJSONAndHandleError[T any](c *gin.Context, deps *dependencies.Dependenci
 	if err := c.ShouldBindJSON(&body); err != nil {
 		deps.Logger.Error("failed to bind JSON body", slog.Any("error", err))
 		c.JSON(http.StatusBadRequest, gen.Error{
-			Code:    "bad_request",
+			Code: "bad_request",
 		})
 		return body, err
 	}
