@@ -88,30 +88,29 @@ components:
 
     SearchRequest:
       type: object
-      required:
-        - username
-        - skills
-        - page
-        - pagesize
       properties:
         username:
           type: string
           description: Username to search.
+          default: ""
         skills:
           type: array
           items:
             type: string
+          default: []
           description: Skills to search.
         page:
           type: integer
           format: int32
           minimum: 0
+          default: 0
           description: Page number to retrieve.
         pagesize:
           type: integer
           format: int32
           minimum: 1
           maximum: 10
+          default: 10
           description: Number of items to retrieve per page.
 
     ProfileEditRequest:

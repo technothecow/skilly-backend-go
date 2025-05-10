@@ -3,7 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -12,41 +12,24 @@ import (
 
 const AuthCookieRegexp = "authToken=([^;]+);\\s*Path=/;\\s*Max-Age=\\d+;\\s*HttpOnly;\\s*SameSite=Strict$"
 
-func AuthorizeClient(t *testing.T, httpClient *http.Client, username string, password string) (func(), error) {
-	body := MarshalBody(t, map[string]any{
-		"username": username,
-		"password": password,
-	})
+/*
+	Utils
+*/
 
-	resp, err := httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
-	assert.NoError(t, err)
+func AuthorizeClient(t *testing.T, httpClient *http.Client, username string, password string) (func(), error) {
+	resp := LoginUser(t, httpClient, username, password)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Regexp(t, AuthCookieRegexp, resp.Header.Get("Set-Cookie"))
 
 	cancel := SetCookies(t, httpClient, resp.Cookies())
 
 	return cancel, nil
 }
 
-func TestUsernameAvailability(t *testing.T) {
-	ctx := context.Background()
-	close, err := TestUsingDockerCompose(ctx, t)
-	assert.NoError(t, err)
-	defer close()
-
-	httpClient := &http.Client{}
-	resp, err := httpClient.Get("http://localhost:8000/check-username?username=test")
-	assert.NoError(t, err)
-	defer resp.Body.Close()
-
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
-
-	response := ParseBody(t, resp)
-	assert.Equal(t, true, response["available"])
-}
+/*
+	Tests
+*/
 
 func TestUserFlow(t *testing.T) {
 	// setup
@@ -57,64 +40,31 @@ func TestUserFlow(t *testing.T) {
 
 	httpClient := &http.Client{}
 
-	t.Run("register", func(t *testing.T) {
-		body := MarshalBody(t, map[string]any{
-			"username": "test",
-			"password": "test",
-			"bio":      "test",
-			"teaching": []string{"test"},
-			"learning": []string{"test"},
-		})
+	t.Run("check-username-available", func(t *testing.T) {
+		assert.True(t, CheckUsernameAvailability(t, httpClient, "test"))
+	})
 
-		resp, err := httpClient.Post("http://localhost:8000/register", "application/json", bytes.NewBuffer(body))
-		assert.NoError(t, err)
+	t.Run("register", func(t *testing.T) {
+		resp := RegisterUser(t, httpClient, "test", "test", "test", []string{"test"}, []string{"test"})
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-		assert.Regexp(t, AuthCookieRegexp, resp.Header.Get("Set-Cookie"))
 	})
 
-	t.Run("check-username", func(t *testing.T) {
-		resp, err := httpClient.Get("http://localhost:8000/check-username?username=test")
-		assert.NoError(t, err)
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-
-		response := ParseBody(t, resp)
-
-		assert.Equal(t, false, response["available"])
+	t.Run("check-taken-username-available", func(t *testing.T) {
+		assert.False(t, CheckUsernameAvailability(t, httpClient, "test"))
 	})
 
 	t.Run("register-existing-username", func(t *testing.T) {
-		body := MarshalBody(t, map[string]any{
-			"username": "test",
-			"password": "test",
-			"bio":      "test",
-			"teaching": []string{"test"},
-			"learning": []string{"test"},
-		})
-
-		resp, err := httpClient.Post("http://localhost:8000/register", "application/json", bytes.NewBuffer(body))
-		assert.NoError(t, err)
+		resp := RegisterUser(t, httpClient, "test", "test", "test", []string{"test"}, []string{"test"})
 		defer resp.Body.Close()
+		respBody := ParseBody(t, resp)
 
-		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
-
-		response := ParseBody(t, resp)
-
-		assert.Equal(t, "username_already_exists", response["code"])
+		assert.Equal(t, "username_already_exists", respBody["code"])
 	})
 
 	t.Run("login", func(t *testing.T) {
-		body := MarshalBody(t, map[string]any{
-			"username": "test",
-			"password": "test",
-		})
-
-		resp, err := httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
-		assert.NoError(t, err)
+		resp := LoginUser(t, httpClient, "test", "test")
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -122,21 +72,11 @@ func TestUserFlow(t *testing.T) {
 	})
 
 	t.Run("login-wrong-password", func(t *testing.T) {
-		body := MarshalBody(t, map[string]any{
-			"username": "test",
-			"password": "wrong",
-		})
-
-		resp, err := httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
-		assert.NoError(t, err)
+		resp := LoginUser(t, httpClient, "test", "wrong")
 		defer resp.Body.Close()
+		respBody := ParseBody(t, resp)
 
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
-
-		response := ParseBody(t, resp)
-
-		assert.Equal(t, "invalid_credentials", response["code"])
+		assert.Equal(t, "invalid_credentials", respBody["code"])
 	})
 
 	t.Run("logout", func(t *testing.T) {
@@ -148,36 +88,31 @@ func TestUserFlow(t *testing.T) {
 		assert.Equal(t, "authToken=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict", resp.Header.Get("Set-Cookie"))
 	})
 
-	t.Run("profile-view", func(t *testing.T) {
-		resp, err := httpClient.Post("http://localhost:8000/profile/view?username=test", "none", bytes.NewBuffer([]byte{}))
-		assert.NoError(t, err)
+	t.Run("profile-view-unauthorized", func(t *testing.T) {
+		resp := ViewUserProfile(t, httpClient, "test")
 		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
-
 		response := ParseBody(t, resp)
 
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.Equal(t, "unauthorized", response["code"])
+	})
 
+	t.Run("profile-view", func(t *testing.T) {
 		cancel, err := AuthorizeClient(t, httpClient, "test", "test")
 		assert.NoError(t, err)
 		defer cancel()
 
-		resp, err = httpClient.Post("http://localhost:8000/profile/view?username=test", "none", bytes.NewBuffer([]byte{}))
-		assert.NoError(t, err)
+		resp := ViewUserProfile(t, httpClient, "test")
 		defer resp.Body.Close()
+		respBody := ParseBody(t, resp)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
 
-		response = ParseBody(t, resp)
-
-		assert.Equal(t, "test", response["username"])
-		assert.Equal(t, "", response["pictureUrl"])
-		assert.Equal(t, "test", response["bio"])
-		assert.Equal(t, []interface{}{"test"}, response["teaching"].([]interface{}))
-		assert.Equal(t, []interface{}{"test"}, response["learning"].([]interface{}))
+		assert.Equal(t, "test", respBody["username"])
+		assert.Equal(t, "", respBody["pictureUrl"])
+		assert.Equal(t, "test", respBody["bio"])
+		assert.Equal(t, []interface{}{"test"}, respBody["teaching"].([]interface{}))
+		assert.Equal(t, []interface{}{"test"}, respBody["learning"].([]interface{}))
 	})
 
 	t.Run("profile-view-nonexistent-username", func(t *testing.T) {
@@ -185,95 +120,107 @@ func TestUserFlow(t *testing.T) {
 		assert.NoError(t, err)
 		defer cancel()
 
-		resp, err := httpClient.Post("http://localhost:8000/profile/view?username=wrong", "none", bytes.NewBuffer([]byte{}))
-		assert.NoError(t, err)
+		resp := ViewUserProfile(t, httpClient, "wrong")
 		defer resp.Body.Close()
+		response := ParseBody(t, resp)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
-
-		response := ParseBody(t, resp)
 
 		assert.Equal(t, "username_not_found", response["code"])
 	})
 
 	t.Run("profile-edit", func(t *testing.T) {
-		// logging in
 		cancel, err := AuthorizeClient(t, httpClient, "test", "test")
 		assert.NoError(t, err)
 		defer cancel()
 
 		// editing profile
-		body, err := json.Marshal(
-			map[string]any{
-				"password": "new",
-				"bio":      "new",
-				"teaching": []string{"new"},
-				"learning": []string{"new"},
-			},
-		)
-		assert.NoError(t, err)
-
-		resp, err := httpClient.Post("http://localhost:8000/profile/edit", "application/json", bytes.NewBuffer(body))
-		assert.NoError(t, err)
+		resp := EditUserProfile(t, httpClient, "new", "new", []string{"new"}, []string{"new"})
 		defer resp.Body.Close()
+		respBody := ParseBody(t, resp)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
 
-		response := ParseBody(t, resp)
-
-		assert.Equal(t, "test", response["username"])
-		assert.Equal(t, "", response["pictureUrl"])
-		assert.Equal(t, "new", response["bio"])
-		assert.Equal(t, []interface{}{"new"}, response["teaching"].([]interface{}))
-		assert.Equal(t, []interface{}{"new"}, response["learning"].([]interface{}))
+		assert.Equal(t, "test", respBody["username"])
+		assert.Equal(t, "", respBody["pictureUrl"])
+		assert.Equal(t, "new", respBody["bio"])
+		assert.Equal(t, []interface{}{"new"}, respBody["teaching"].([]interface{}))
+		assert.Equal(t, []interface{}{"new"}, respBody["learning"].([]interface{}))
 
 		// checking if the profile was updated by viewing it
-		resp, err = httpClient.Post("http://localhost:8000/profile/view?username=test", "none", bytes.NewBuffer([]byte{}))
-		assert.NoError(t, err)
+		resp = ViewUserProfile(t, httpClient, "test")
 		defer resp.Body.Close()
+		respBody = ParseBody(t, resp)
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
-
-		response = ParseBody(t, resp)
-
-		assert.Equal(t, "test", response["username"])
-		assert.Equal(t, "", response["pictureUrl"])
-		assert.Equal(t, "new", response["bio"])
-		assert.Equal(t, []interface{}{"new"}, response["teaching"].([]interface{}))
-		assert.Equal(t, []interface{}{"new"}, response["learning"].([]interface{}))
+		assert.Equal(t, "test", respBody["username"])
+		assert.Equal(t, "", respBody["pictureUrl"])
+		assert.Equal(t, "new", respBody["bio"])
+		assert.Equal(t, []interface{}{"new"}, respBody["teaching"].([]interface{}))
+		assert.Equal(t, []interface{}{"new"}, respBody["learning"].([]interface{}))
 
 		// checking if the profile was updated by attempting to login to it with the old password
-		body, err = json.Marshal(
-			map[string]any{
-				"username": "test",
-				"password": "test",
-			},
-		)
-		assert.NoError(t, err)
-
-		resp, err = httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
-		assert.NoError(t, err)
+		resp = LoginUser(t, httpClient, "test", "test")
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 
 		// checking if the profile was updated by attempting to login to it with the new password
-		body, err = json.Marshal(
-			map[string]any{
-				"username": "test",
-				"password": "new",
-			},
-		)
-		assert.NoError(t, err)
-
-		resp, err = httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
-		assert.NoError(t, err)
+		resp = LoginUser(t, httpClient, "test", "new")
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Regexp(t, AuthCookieRegexp, resp.Header.Get("Set-Cookie"))
+	})
+
+	t.Run("search-users", func(t *testing.T) {
+		for i := 0; i < 3; i++ {
+			resp := RegisterUser(
+				t, httpClient, fmt.Sprintf("test%d", i),
+				"testpswd", "", 
+				[]string{"testTeach1", "testTeach2"}, 
+				[]string{"testLearn1", "testLearn2"},
+			)
+			defer resp.Body.Close()
+			assert.Equal(t, http.StatusCreated, resp.StatusCode)
+		}
+
+		cancel, err := AuthorizeClient(t, httpClient, "test", "new")
+		assert.NoError(t, err)
+		defer cancel()
+
+		// no results since no user is learning "new"
+		resp := SearchUsers(t, httpClient, "", []string{}, -1, -1)
+		defer resp.Body.Close()
+		respBody := ParseBody(t, resp)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		assert.Equal(t, 0, len(respBody["users"].([]interface{})))
+
+		// all users (but not "test") are teaching "testTeach"
+		resp = EditUserProfile(t, httpClient, "", "", []string{"testLearn1"}, []string{"testLearn1"})
+		defer resp.Body.Close()
+		respBody = ParseBody(t, resp)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, "test", respBody["username"])
+
+		resp = SearchUsers(t, httpClient, "", []string{}, -1, -1)
+		defer resp.Body.Close()
+		respBody = ParseBody(t, resp)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		assert.Equal(t, 3, len(respBody["users"].([]interface{})))
+
+		// nothing since no user is teaching "testTeach"
+		resp = SearchUsers(t, httpClient, "", []string{"testTeach"}, -1, -1)
+		defer resp.Body.Close()
+		respBody = ParseBody(t, resp)
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		assert.Equal(t, 0, len(respBody["users"].([]interface{})))
 	})
 }

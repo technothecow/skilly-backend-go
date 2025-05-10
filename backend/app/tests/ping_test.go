@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPing(t *testing.T) {
@@ -22,7 +24,5 @@ func TestPing(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected status code 200, got %d", resp.StatusCode)
-	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }

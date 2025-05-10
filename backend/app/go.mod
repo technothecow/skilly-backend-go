@@ -2,7 +2,15 @@ module skilly
 
 go 1.24.0
 
-require github.com/gin-gonic/gin v1.10.0
+require (
+	github.com/getkin/kin-openapi v0.127.0
+	github.com/gin-gonic/gin v1.10.0
+	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/oapi-codegen/runtime v1.1.1
+	github.com/stretchr/testify v1.10.0
+	github.com/testcontainers/testcontainers-go v0.37.0
+	github.com/testcontainers/testcontainers-go/modules/compose v0.37.0
+)
 
 require (
 	dario.cat/mergo v1.0.1 // indirect
@@ -64,7 +72,6 @@ require (
 	github.com/fsnotify/fsevents v0.2.0 // indirect
 	github.com/fvbommel/sortorder v1.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/getkin/kin-openapi v0.127.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -74,7 +81,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.0.0 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
@@ -128,7 +134,6 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
-	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
@@ -151,10 +156,6 @@ require (
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966 // indirect
 	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
-	github.com/testcontainers/testcontainers-go v0.37.0 // indirect
-	github.com/testcontainers/testcontainers-go/modules/compose v0.37.0 // indirect
-	github.com/testcontainers/testcontainers-go/modules/mongodb v0.37.0 // indirect
 	github.com/theupdateframework/notary v0.7.0 // indirect
 	github.com/tilt-dev/fsnotify v1.4.8-0.20220602155310-fff9c274a375 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
@@ -219,7 +220,6 @@ require (
 	github.com/bytedance/sonic v1.13.2 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
-	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/cors v1.7.5
 	github.com/gin-contrib/sse v1.0.0 // indirect
@@ -234,13 +234,12 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/oapi-codegen/gin-middleware v1.0.2
-	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	go.mongodb.org/mongo-driver v1.17.3
 	golang.org/x/arch v0.15.0 // indirect
-	golang.org/x/crypto v0.37.0 // indirect
+	golang.org/x/crypto v0.37.0
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
