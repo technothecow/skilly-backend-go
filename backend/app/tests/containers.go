@@ -10,7 +10,7 @@ import (
 )
 
 func TestUsingDockerCompose(ctx context.Context, t *testing.T) (func(), error) {
-	composeFilePath := "../docker-compose.tst.yml"
+	composeFilePath := "../docker/docker-compose.tst.yml"
 
 	stack, err := compose.NewDockerComposeWith(
 		compose.WithStackFiles(composeFilePath),
@@ -20,8 +20,9 @@ func TestUsingDockerCompose(ctx context.Context, t *testing.T) (func(), error) {
 	}
 
 	err = stack.
-		WaitForService("app", wait.ForListeningPort("8000/tcp")).
+		WaitForService("nginx", wait.ForListeningPort("80/tcp")).
 		WaitForService("mongo", wait.ForListeningPort("27017/tcp")).
+		WaitForService("kafka", wait.ForHealthCheck()).
 		Up(ctx, compose.Wait(true))
 	if err != nil {
 		log.Fatal(err)

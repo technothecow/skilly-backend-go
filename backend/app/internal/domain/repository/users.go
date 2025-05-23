@@ -9,8 +9,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	imongo "skilly/internal/adapters/mongo"
 	"skilly/internal/domain/models"
-	imongo "skilly/internal/infrastructure/mongo"
 )
 
 type UserRepository interface {
@@ -88,7 +88,7 @@ func (r *userRepositoryImpl) DeleteUser(ctx context.Context, user models.User) e
 }
 
 /*
-	SearchUsers searches for users by username that are teaching at least one of the given skills and learning at least one of the given skills.
+SearchUsers searches for users by username that are teaching at least one of the given skills and learning at least one of the given skills.
 */
 func (r *userRepositoryImpl) SearchUsers(ctx context.Context, excludeUsername string, usernameSubstring string, learning []string, teaching []string, page int64, pagesize int64) ([]models.User, error) {
 	filter := bson.M{}

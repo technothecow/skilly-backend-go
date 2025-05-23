@@ -36,7 +36,6 @@ func (s *Server) PostProfileView(c *gin.Context, params gen.PostProfileViewParam
 
 	c.JSON(http.StatusOK, gen.UserProfile{
 		Username: user.Username,
-		PictureUrl: "",
 		Bio: user.Bio,
 		Teaching: user.Teaching,
 		Learning: user.Learning,

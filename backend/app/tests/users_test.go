@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -80,7 +82,7 @@ func TestUserFlow(t *testing.T) {
 	})
 
 	t.Run("logout", func(t *testing.T) {
-		resp, err := httpClient.Post("http://localhost:8000/logout", "none", bytes.NewBuffer([]byte{}))
+		resp, err := httpClient.Post(Url+"/logout", "none", bytes.NewBuffer([]byte{}))
 		assert.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -109,7 +111,6 @@ func TestUserFlow(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		assert.Equal(t, "test", respBody["username"])
-		assert.Equal(t, "", respBody["pictureUrl"])
 		assert.Equal(t, "test", respBody["bio"])
 		assert.Equal(t, []interface{}{"test"}, respBody["teaching"].([]interface{}))
 		assert.Equal(t, []interface{}{"test"}, respBody["learning"].([]interface{}))
@@ -143,7 +144,6 @@ func TestUserFlow(t *testing.T) {
 		assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
 
 		assert.Equal(t, "test", respBody["username"])
-		assert.Equal(t, "", respBody["pictureUrl"])
 		assert.Equal(t, "new", respBody["bio"])
 		assert.Equal(t, []interface{}{"new"}, respBody["teaching"].([]interface{}))
 		assert.Equal(t, []interface{}{"new"}, respBody["learning"].([]interface{}))
@@ -154,7 +154,6 @@ func TestUserFlow(t *testing.T) {
 		respBody = ParseBody(t, resp)
 
 		assert.Equal(t, "test", respBody["username"])
-		assert.Equal(t, "", respBody["pictureUrl"])
 		assert.Equal(t, "new", respBody["bio"])
 		assert.Equal(t, []interface{}{"new"}, respBody["teaching"].([]interface{}))
 		assert.Equal(t, []interface{}{"new"}, respBody["learning"].([]interface{}))
@@ -177,8 +176,8 @@ func TestUserFlow(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			resp := RegisterUser(
 				t, httpClient, fmt.Sprintf("test%d", i),
-				"testpswd", "", 
-				[]string{"testTeach1", "testTeach2"}, 
+				"testpswd", "",
+				[]string{"testTeach1", "testTeach2"},
 				[]string{"testLearn1", "testLearn2"},
 			)
 			defer resp.Body.Close()
@@ -222,5 +221,64 @@ func TestUserFlow(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		assert.Equal(t, 0, len(respBody["users"].([]interface{})))
+	})
+
+	t.Run("set-profile-picture-unauthorized", func(t *testing.T) {
+		resp, err := httpClient.Post(Url+"/profile/set_picture", "application/json", bytes.NewBuffer([]byte{}))
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("set-profile-picture", func(t *testing.T) {
+		cancel, err := AuthorizeClient(t, httpClient, "test", "new")
+		assert.NoError(t, err)
+		defer cancel()
+
+		resp := SetProfilePicture(t, httpClient, []byte(
+			"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x06\xed\x00\x00\x06V\b\x06\x00\x00\x00\xa8"))
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Empty(t, resp.Body)
+
+		// make sure the picture is not reset by worker
+		buf := make([]byte, 16)
+		for range 10 {
+			resp = GetProfilePicture(t, httpClient, "test")
+			defer resp.Body.Close()
+
+			n, err := resp.Body.Read(buf)
+			if n == 0 || err == io.EOF {
+				assert.Equal(t, "", "picture was reset by worker")
+				break
+			}
+			time.Sleep(time.Millisecond * 500)
+		}
+	})
+
+	t.Run("set-profile-picture-bad-type", func(t *testing.T) {
+		cancel, err := AuthorizeClient(t, httpClient, "test", "new")
+		assert.NoError(t, err)
+		defer cancel()
+
+		resp := SetProfilePicture(t, httpClient, []byte("\x1a"))
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Empty(t, resp.Body)
+
+		// make sure the picture is reset
+		buf := make([]byte, 16)
+		for i := range 10 {
+			assert.NotEqual(t, 9, i)
+			resp = GetProfilePicture(t, httpClient, "test")
+			defer resp.Body.Close()
+
+			n, err := resp.Body.Read(buf)
+			if n == 0 || err == io.EOF {
+				break
+			}
+			time.Sleep(time.Millisecond * 500)
+		}
 	})
 }

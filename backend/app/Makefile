@@ -8,7 +8,7 @@ gen:
 	@echo "==> Go generate finished."
 
 run:
-	docker-compose -f docker-compose.dev.yml up --build
+	docker-compose -f docker/docker-compose.dev.yml up --build
 
 test:
 	go test skilly/tests -v

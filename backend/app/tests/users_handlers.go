@@ -18,7 +18,7 @@ func RegisterUser(t *testing.T, httpClient *http.Client, username string, passwo
 		"learning": learning,
 	})
 
-	resp, err := httpClient.Post("http://localhost:8000/register", "application/json", bytes.NewBuffer(body))
+	resp, err := httpClient.Post(Url + "/register", "application/json", bytes.NewBuffer(body))
 	assert.NoError(t, err)
 
 	if resp.StatusCode == http.StatusCreated {
@@ -29,7 +29,7 @@ func RegisterUser(t *testing.T, httpClient *http.Client, username string, passwo
 }
 
 func CheckUsernameAvailability(t *testing.T, httpClient *http.Client, username string) bool {
-	resp, err := httpClient.Get("http://localhost:8000/check-username?username=" + username)
+	resp, err := httpClient.Get(Url + "/check-username?username=" + username)
 	assert.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -46,7 +46,7 @@ func LoginUser(t *testing.T, httpClient *http.Client, username string, password 
 		"password": password,
 	})
 
-	resp, err := httpClient.Post("http://localhost:8000/login", "application/json", bytes.NewBuffer(body))
+	resp, err := httpClient.Post(Url + "/login", "application/json", bytes.NewBuffer(body))
 	assert.NoError(t, err)
 
 	if resp.StatusCode == http.StatusOK {
@@ -57,7 +57,7 @@ func LoginUser(t *testing.T, httpClient *http.Client, username string, password 
 }
 
 func ViewUserProfile(t *testing.T, httpClient *http.Client, username string) *http.Response {
-	resp, err := httpClient.Post("http://localhost:8000/profile/view?username="+username, "none", bytes.NewBuffer([]byte{}))
+	resp, err := httpClient.Post(Url + "/profile/view?username="+username, "none", bytes.NewBuffer([]byte{}))
 	assert.NoError(t, err)
 
 	assert.Equal(t, "application/json; charset=utf-8", resp.Header.Get("Content-Type"))
@@ -84,7 +84,7 @@ func EditUserProfile(t *testing.T, httpClient *http.Client, password string, bio
 	body, err := json.Marshal(bodyRaw)
 	assert.NoError(t, err)
 
-	resp, err := httpClient.Post("http://localhost:8000/profile/edit", "application/json", bytes.NewBuffer(body))
+	resp, err := httpClient.Post(Url + "/profile/edit", "application/json", bytes.NewBuffer(body))
 	assert.NoError(t, err)
 
 	return resp
@@ -108,8 +108,45 @@ func SearchUsers(t *testing.T, httpClient *http.Client, username string, skills 
 
 	body := MarshalBody(t, bodyRaw)
 
-	resp, err := httpClient.Post("http://localhost:8000/search", "application/json", bytes.NewBuffer(body))
+	resp, err := httpClient.Post(Url + "/search", "application/json", bytes.NewBuffer(body))
 	assert.NoError(t, err)
 	
+	return resp
+}
+
+func SetProfilePicture(t *testing.T, httpClient *http.Client, blob []byte) *http.Response {
+	resp, err := httpClient.Post(Url + "/profile/set_picture", "application/json", bytes.NewBuffer([]byte{}))
+	assert.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	respBody := ParseBody(t, resp)
+	defer resp.Body.Close()
+
+	url := respBody["url"].(string)
+	assert.NotEmpty(t, url)
+
+	request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(blob))
+	assert.NoError(t, err)
+
+	resp, err = httpClient.Do(request)
+	assert.NoError(t, err)
+
+	return resp
+}
+
+func GetProfilePicture(t *testing.T, httpClient *http.Client, username string) *http.Response {
+	resp, err := httpClient.Get(Url + "/profile/get_picture?username=" + username)
+	assert.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	defer resp.Body.Close()
+	respBody := ParseBody(t, resp)
+
+	resp, err = httpClient.Get(respBody["url"].(string))
+	assert.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
 	return resp
 }

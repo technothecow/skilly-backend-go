@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
@@ -13,16 +12,11 @@ import (
 
 type Server struct {
 	gen.ServerInterface
-	deps dependencies.Dependencies
+	deps *dependencies.Dependencies
 }
 
-func NewServer() *Server {
-	return &Server{deps: dependencies.SetupDependencies()}
-}
-
-func (s *Server) Shutdown(ctx context.Context) {
-	s.deps.Logger.Info("Disconnecting MongoDB client...")
-	s.deps.Mongo.Disconnect(ctx)
+func NewServer(deps *dependencies.Dependencies) *Server {
+	return &Server{deps: deps}
 }
 
 func BindJSONAndHandleError[T any](c *gin.Context, deps *dependencies.Dependencies) (T, error) {

@@ -23,7 +23,7 @@ func (s *Server) PostSearch(c *gin.Context) {
 		return
 	}
 
-	body, err := BindJSONAndHandleError[gen.SearchRequest](c, &s.deps)
+	body, err := BindJSONAndHandleError[gen.SearchRequest](c, s.deps)
 	if err != nil {
 		return
 	}
@@ -41,7 +41,6 @@ func (s *Server) PostSearch(c *gin.Context) {
 		searchResult[i] = gen.UserProfile{
 			Username: user.Username,
 			Bio: user.Bio,
-			PictureUrl: user.PictureUrl,
 			Teaching: user.Teaching,
 			Learning: user.Learning,
 		}

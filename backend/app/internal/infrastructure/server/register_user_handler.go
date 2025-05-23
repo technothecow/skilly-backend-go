@@ -16,7 +16,7 @@ import (
 )
 
 func (s *Server) PostRegister(c *gin.Context) {
-	body, err := BindJSONAndHandleError[gen.RegisterRequest](c, &s.deps)
+	body, err := BindJSONAndHandleError[gen.RegisterRequest](c, s.deps)
 	if err != nil {
 		return
 	}

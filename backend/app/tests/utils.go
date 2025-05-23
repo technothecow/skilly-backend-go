@@ -24,7 +24,7 @@ func MarshalBody(t *testing.T, obj any) []byte {
 }
 
 func GetUrl(t *testing.T) *url.URL {
-	url, err := url.Parse("http://localhost:8000/")
+	url, err := url.Parse(Url)
 	assert.NoError(t, err)
 	return url
 }

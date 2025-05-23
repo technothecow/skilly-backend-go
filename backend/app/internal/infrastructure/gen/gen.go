@@ -101,9 +101,6 @@ type UserProfile struct {
 	// Learning Skills the user wants to learn.
 	Learning []string `json:"learning"`
 
-	// PictureUrl URL to the user's avatar image.
-	PictureUrl string `json:"pictureUrl"`
-
 	// Teaching Skills the user is willing to teach.
 	Teaching []string `json:"teaching"`
 
@@ -119,6 +116,12 @@ type BadRequest = Error
 
 // Conflict defines model for Conflict.
 type Conflict = Error
+
+// GetPictureResponse defines model for GetPictureResponse.
+type GetPictureResponse struct {
+	// Url URL to the user's avatar image.
+	Url string `json:"url"`
+}
 
 // PongResponse defines model for PongResponse.
 type PongResponse struct {
@@ -139,6 +142,12 @@ type SetPictureResponse struct {
 
 // GetCheckUsernameParams defines parameters for GetCheckUsername.
 type GetCheckUsernameParams struct {
+	// Username Username to check.
+	Username UsernameParam `form:"username" json:"username"`
+}
+
+// GetProfileGetPictureParams defines parameters for GetProfileGetPicture.
+type GetProfileGetPictureParams struct {
 	// Username Username to check.
 	Username UsernameParam `form:"username" json:"username"`
 }
@@ -178,6 +187,9 @@ type ServerInterface interface {
 	// Edit the current user's profile
 	// (POST /profile/edit)
 	PostProfileEdit(c *gin.Context)
+	// Get link to the current user's profile picture
+	// (GET /profile/get_picture)
+	GetProfileGetPicture(c *gin.Context, params GetProfileGetPictureParams)
 	// Set the current user's profile picture
 	// (POST /profile/set_picture)
 	PostProfileSetPicture(c *gin.Context)
@@ -286,6 +298,39 @@ func (siw *ServerInterfaceWrapper) PostProfileEdit(c *gin.Context) {
 	siw.Handler.PostProfileEdit(c)
 }
 
+// GetProfileGetPicture operation middleware
+func (siw *ServerInterfaceWrapper) GetProfileGetPicture(c *gin.Context) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProfileGetPictureParams
+
+	// ------------- Required query parameter "username" -------------
+
+	if paramValue := c.Query("username"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandler(c, fmt.Errorf("Query argument username is required, but not found"), http.StatusBadRequest)
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "username", c.Request.URL.Query(), &params.Username)
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter username: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetProfileGetPicture(c, params)
+}
+
 // PostProfileSetPicture operation middleware
 func (siw *ServerInterfaceWrapper) PostProfileSetPicture(c *gin.Context) {
 
@@ -390,6 +435,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/logout", wrapper.PostLogout)
 	router.GET(options.BaseURL+"/ping", wrapper.GetPing)
 	router.POST(options.BaseURL+"/profile/edit", wrapper.PostProfileEdit)
+	router.GET(options.BaseURL+"/profile/get_picture", wrapper.GetProfileGetPicture)
 	router.POST(options.BaseURL+"/profile/set_picture", wrapper.PostProfileSetPicture)
 	router.POST(options.BaseURL+"/profile/view", wrapper.PostProfileView)
 	router.POST(options.BaseURL+"/register", wrapper.PostRegister)
@@ -399,33 +445,33 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"s/k3AAD//9fBMxdUGwAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

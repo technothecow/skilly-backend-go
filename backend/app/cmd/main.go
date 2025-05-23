@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,9 +13,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/oapi-codegen/gin-middleware"
 
+	"skilly/internal/infrastructure/dependencies"
 	"skilly/internal/infrastructure/gen"
 	"skilly/internal/infrastructure/middleware"
 	"skilly/internal/infrastructure/server"
+	"skilly/internal/infrastructure/workers"
 )
 
 func setupRouter() *gin.Engine {
@@ -44,10 +45,9 @@ func setupRouter() *gin.Engine {
 	return r
 }
 
-func main() {
+func startServer(deps *dependencies.Dependencies) func(ctx context.Context) {
 	router := setupRouter()
-	appServer := server.NewServer()
-	logger := slog.Default()
+	appServer := server.NewServer(deps)
 
 	gen.RegisterHandlers(router, appServer)
 
@@ -58,26 +58,38 @@ func main() {
 
 	// Start server in a goroutine so it doesn't block.
 	go func() {
-		log.Println("Listening on port 8000...")
+		deps.Logger.Info("Listening on port 8000...")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			deps.Logger.Error("Failed to start server:", slog.Any("error", err))
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server with a timeout.
+	return func (ctx context.Context) {
+		if err := srv.Shutdown(ctx); err != nil {
+			deps.Logger.Error("Server forced to shutdown:", slog.Any("error", err))
+		}
+	}
+}
+
+func main() {
+	deps := dependencies.MustNewDependencies()
+
+	workerManager := workers.NewWorkerManager(deps)
+	workerManager.Start()
+
+	stopServer := startServer(deps)
+
+	// graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit // Block until a signal is received
-	logger.Info("Shutting down server...")
+	deps.Logger.Info("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	
+	go stopServer(ctx)
+	go workerManager.Stop()
 
-	if err := srv.Shutdown(ctx); err != nil {
-		logger.Error("Server forced to shutdown:", slog.Any("error", err))
-	}
-
-	appServer.Shutdown(ctx)
-
-	logger.Info("Server exiting")
+	deps.Logger.Info("Server exiting")
 }

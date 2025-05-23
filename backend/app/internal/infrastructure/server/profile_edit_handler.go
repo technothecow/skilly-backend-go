@@ -1,3 +1,4 @@
+
 package server
 
 import (
@@ -27,7 +28,7 @@ func (s *Server) PostProfileEdit(c *gin.Context) {
 		return
 	}
 
-	body, err := BindJSONAndHandleError[gen.ProfileEditRequest](c, &s.deps)
+	body, err := BindJSONAndHandleError[gen.ProfileEditRequest](c, s.deps)
 	if err != nil {
 		return
 	}
@@ -63,7 +64,6 @@ func (s *Server) PostProfileEdit(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gen.UserProfile{
 		Username: user.Username,
-		PictureUrl: "",
 		Bio: user.Bio,
 		Teaching: user.Teaching,
 		Learning: user.Learning,

@@ -13,7 +13,7 @@ import (
 )
 
 func (s *Server) PostLogin(c *gin.Context) {
-	body, err := BindJSONAndHandleError[gen.LoginRequest](c, &s.deps)
+	body, err := BindJSONAndHandleError[gen.LoginRequest](c, s.deps)
 	if err != nil {
 		return
 	}

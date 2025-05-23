@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/mongo"
+	libmongo "go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
@@ -29,9 +29,8 @@ type Config struct {
 
 // Client is a wrapper around the official mongo.Client and its Config.
 type Client struct {
-	*mongo.Client
-	Database *mongo.Database
-	logger   *slog.Logger
+	*libmongo.Client
+	Database *libmongo.Database
 	config   Config
 }
 
@@ -101,11 +100,11 @@ func LoadConfigFromEnv() Config {
 
 // Connect establishes a connection to MongoDB based on the provided configuration.
 // It also performs a ping check with retries to ensure the connection is live.
-func Connect(ctx context.Context, cfg Config, logger *slog.Logger) (*Client, error) {
-	if logger == nil {
-		logger = slog.Default() // Fallback to default logger if none provided
+func Connect(ctx context.Context, cfg Config, l *slog.Logger) (*Client, error) {
+	if l == nil {
+		l = slog.Default() // Fallback to default logger if none provided
 	}
-	log := logger.With(slog.String("mongodb_uri_partial", getPartialURI(cfg.URI))) // Log partial URI for security
+	logger := l.With(slog.String("mongodb_uri_partial", getPartialURI(cfg.URI))) // Log partial URI for security
 
 	clientOptions := options.Client().
 		ApplyURI(cfg.URI).
@@ -115,7 +114,7 @@ func Connect(ctx context.Context, cfg Config, logger *slog.Logger) (*Client, err
 		SetConnectTimeout(cfg.ConnectTimeout)
 		// Potentially add: .SetRetryWrites(true) for replica sets, .SetReadConcern(), .SetWriteConcern()
 
-	log.Info("Attempting to connect to MongoDB",
+	logger.Info("Attempting to connect to MongoDB",
 		slog.String("database", cfg.DatabaseName),
 		slog.Uint64("min_pool_size", cfg.MinPoolSize),
 		slog.Uint64("max_pool_size", cfg.MaxPoolSize),
@@ -126,16 +125,16 @@ func Connect(ctx context.Context, cfg Config, logger *slog.Logger) (*Client, err
 	connectCtx, cancelConnect := context.WithTimeout(ctx, cfg.ConnectTimeout)
 	defer cancelConnect()
 
-	mongoC, err := mongo.Connect(connectCtx, clientOptions)
+	mongoC, err := libmongo.Connect(connectCtx, clientOptions)
 	if err != nil {
-		log.Error("Failed to create MongoDB client", slog.Any("error", err))
+		logger.Error("Failed to create MongoDB client", slog.Any("error", err))
 		return nil, fmt.Errorf("mongo.Connect: %w", err)
 	}
 
 	var pingErr error
 	for i := 0; i < cfg.RetryConnectAttempts+1; i++ {
 		if i > 0 { // Don't sleep on the first attempt
-			log.Warn("Retrying MongoDB ping", slog.Int("attempt", i+1), slog.Duration("delay", cfg.RetryConnectDelay))
+			logger.Warn("Retrying MongoDB ping", slog.Int("attempt", i+1), slog.Duration("delay", cfg.RetryConnectDelay))
 			time.Sleep(cfg.RetryConnectDelay)
 		}
 
@@ -144,19 +143,19 @@ func Connect(ctx context.Context, cfg Config, logger *slog.Logger) (*Client, err
 		cancelPing()
 
 		if pingErr == nil {
-			log.Info("Successfully connected and pinged MongoDB.")
+			logger.Info("Successfully connected and pinged MongoDB.")
 			db := mongoC.Database(cfg.DatabaseName)
-			return &Client{Client: mongoC, Database: db, logger: logger, config: cfg}, nil
+			return &Client{Client: mongoC, Database: db, config: cfg}, nil
 		}
-		log.Warn("MongoDB ping failed", slog.Int("attempt", i+1), slog.Any("error", pingErr))
+		logger.Warn("MongoDB ping failed", slog.Int("attempt", i+1), slog.Any("error", pingErr))
 	}
 
 	// If all pings failed, attempt to disconnect the partially formed client and return the last error
-	log.Error("Failed to ping MongoDB after multiple retries", slog.Any("last_error", pingErr))
+	logger.Error("Failed to ping MongoDB after multiple retries", slog.Any("last_error", pingErr))
 	disconnectCtx, cancelDisconnect := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelDisconnect()
 	if err := mongoC.Disconnect(disconnectCtx); err != nil {
-		log.Error("Error disconnecting client after failed ping", slog.Any("error", err))
+		logger.Error("Error disconnecting client after failed ping", slog.Any("error", err))
 	}
 	return nil, fmt.Errorf("failed to ping MongoDB after %d retries: %w", cfg.RetryConnectAttempts, pingErr)
 }
@@ -172,10 +171,8 @@ func MustConnect(ctx context.Context, cfg Config, logger *slog.Logger) *Client {
 // Disconnect gracefully closes the MongoDB client connection.
 func (c *Client) Disconnect(ctx context.Context) error {
 	if c.Client == nil {
-		c.logger.Warn("MongoDB client is nil, no disconnection needed.")
 		return nil
 	}
-	c.logger.Info("Disconnecting MongoDB client...", slog.String("mongodb_uri_partial", getPartialURI(c.config.URI)))
 
 	disconnectTimeout := 10 * time.Second // Give some time for connections to close
 	if val := os.Getenv("MONGODB_DISCONNECT_TIMEOUT_SECONDS"); val != "" {
@@ -188,10 +185,8 @@ func (c *Client) Disconnect(ctx context.Context) error {
 	defer cancel()
 
 	if err := c.Client.Disconnect(disconnectCtx); err != nil {
-		c.logger.Error("Failed to disconnect MongoDB client", slog.Any("error", err))
 		return fmt.Errorf("MongoDB Disconnect error: %w", err)
 	}
-	c.logger.Info("MongoDB client disconnected successfully.")
 	return nil
 }
 

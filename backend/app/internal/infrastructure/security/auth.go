@@ -11,7 +11,7 @@ import (
 	"skilly/internal/infrastructure/gen"
 )
 
-func AuthUser(c *gin.Context, deps dependencies.Dependencies) (string, error) {
+func AuthUser(c *gin.Context, deps *dependencies.Dependencies) (string, error) {
 	authCookie, err := c.Cookie(TokenCookieName)
 	if err != nil {
 		if err == http.ErrNoCookie {
